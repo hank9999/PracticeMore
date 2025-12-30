@@ -13,7 +13,7 @@ import SettingsPage from './pages/SettingsPage'
 function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter basename="/practice-more">
+      <BrowserRouter basename="/practice-more/">
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
