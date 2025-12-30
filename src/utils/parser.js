@@ -70,8 +70,8 @@ function parseOptions(lines, startIndex) {
   for (let i = startIndex; i < lines.length; i++) {
     const line = lines[i].trim()
 
-    // 遇到 "我的答案" 或下一题，停止解析选项
-    if (line.startsWith('我的答案') || /^\d+[.、．\s]/.test(line)) {
+    // 遇到 "我的答案" 或 "正确答案" 或下一题，停止解析选项
+    if (/^(?:我的答案|正确答案)/.test(line) || /^\d+[.、．\s]/.test(line)) {
       break
     }
 
@@ -126,14 +126,12 @@ function parseQuestion(text, currentType) {
   // 解析选项
   const options = parseOptions(lines, optionStartIndex)
 
-  // 解析答案
+  // 解析答案（支持 "我的答案" 和 "正确答案" 两种格式）
   let answer = ''
   for (const line of lines) {
-    if (line.startsWith('我的答案')) {
-      const answerMatch = line.match(/我的答案[:：]?\s*([A-Z]+)/i)
-      if (answerMatch) {
-        answer = answerMatch[1].toUpperCase()
-      }
+    const answerMatch = line.match(/(?:我的答案|正确答案)[:：]?\s*([A-Z]+)/i)
+    if (answerMatch) {
+      answer = answerMatch[1].toUpperCase()
       break
     }
   }
@@ -168,9 +166,17 @@ export function parseTxtFile(text) {
   const questions = []
   let currentType = null
 
+  // 预处理：在答案后紧跟题号的地方插入换行
+  // 例如：我的答案:A  9. -> 我的答案:A\n9.
+  // 例如：正确答案:B   4. -> 正确答案:B\n4.
+  const preprocessedText = text.replace(
+    /((?:我的答案|正确答案)[:：]?\s*[A-Z]+)\s+(\d+[.、．]\s*)/gi,
+    '$1\n$2'
+  )
+
   // 按题目分割
   // 支持格式：1. 或 1、或 1. (单选题, 2.0 分) 等
-  const questionBlocks = text.split(/(?=\n\d+[.、．\s])/g)
+  const questionBlocks = preprocessedText.split(/(?=\n\d+[.、．]\s*)/g)
 
   for (const block of questionBlocks) {
     const trimmedBlock = block.trim()
