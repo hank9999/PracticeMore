@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Plus, Upload, Trash2, Play, Shuffle, ChevronRight, BookOpen, Eye } from 'lucide-react'
-import { questionBankAPI, practiceRecordAPI, wrongQuestionAPI } from '../db'
+import { Plus, Upload, Trash2, Play, Shuffle, ChevronRight, BookOpen, Eye, RotateCcw } from 'lucide-react'
+import { questionBankAPI, practiceRecordAPI, wrongQuestionAPI, sessionAPI } from '../db'
 import { formatDate } from '../utils/helpers'
 
 export default function HomePage() {
@@ -9,6 +9,7 @@ export default function HomePage() {
   const [stats, setStats] = useState({ total: 0, correct: 0, wrong: 0, accuracy: 0 })
   const [todayStats, setTodayStats] = useState({ total: 0, correct: 0 })
   const [wrongCount, setWrongCount] = useState(0)
+  const [sessions, setSessions] = useState({}) // bankId -> session
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
@@ -18,16 +19,24 @@ export default function HomePage() {
 
   const loadData = async () => {
     try {
-      const [banksData, statsData, todayData, wrongData] = await Promise.all([
+      const [banksData, statsData, todayData, wrongData, activeSessions] = await Promise.all([
         questionBankAPI.getAll(),
         practiceRecordAPI.getStats(),
         practiceRecordAPI.getTodayStats(),
-        wrongQuestionAPI.getCount()
+        wrongQuestionAPI.getCount(),
+        sessionAPI.getAllActive()
       ])
       setBanks(banksData)
       setStats(statsData)
       setTodayStats(todayData)
       setWrongCount(wrongData)
+
+      // 将会话转换为 bankId -> session 的映射
+      const sessionMap = {}
+      activeSessions.forEach(s => {
+        sessionMap[s.bankId] = s
+      })
+      setSessions(sessionMap)
     } finally {
       setLoading(false)
     }
@@ -37,12 +46,21 @@ export default function HomePage() {
     e.stopPropagation()
     if (confirm('确定要删除这个题库吗？相关的刷题记录和错题也会被删除。')) {
       await questionBankAPI.delete(id)
+      // 同时删除会话
+      await sessionAPI.delete(id)
       loadData()
     }
   }
 
   const startPractice = (bankId, mode) => {
     navigate(`/practice/${bankId}?mode=${mode}`)
+  }
+
+  const continuePractice = (bankId) => {
+    const session = sessions[bankId]
+    if (session) {
+      navigate(`/practice/${bankId}?mode=${session.mode}&continue=true`)
+    }
   }
 
   const startMemorize = (bankId) => {
@@ -140,51 +158,72 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {banks.map((bank) => (
-              <div
-                key={bank.id}
-                className="bg-[var(--color-card)] rounded-xl p-4 shadow-sm"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-medium">{bank.name}</h3>
-                    <p className="text-sm text-[var(--color-text-secondary)]">
-                      {bank.questionCount} 题 · {formatDate(bank.createdAt)}
-                    </p>
+            {banks.map((bank) => {
+              const session = sessions[bank.id]
+              const hasSession = session && session.currentIndex > 0
+
+              return (
+                <div
+                  key={bank.id}
+                  className="bg-[var(--color-card)] rounded-xl p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h3 className="font-medium">{bank.name}</h3>
+                      <p className="text-sm text-[var(--color-text-secondary)]">
+                        {bank.questionCount} 题 · {formatDate(bank.createdAt)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => handleDelete(bank.id, e)}
+                      className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+
+                  {/* 继续刷题入口 */}
+                  {hasSession && (
+                    <button
+                      onClick={() => continuePractice(bank.id)}
+                      className="w-full flex items-center justify-between mb-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <RotateCcw size={18} className="text-orange-500" />
+                        <span className="font-medium text-orange-600 dark:text-orange-400">继续刷题</span>
+                      </div>
+                      <span className="text-sm text-orange-500">
+                        {session.currentIndex + 1}/{session.questionIds?.length || bank.questionCount} · {session.mode === 'random' ? '随机' : '顺序'}
+                      </span>
+                    </button>
+                  )}
+
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      onClick={() => startPractice(bank.id, 'sequence')}
+                      className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                    >
+                      <Play size={16} />
+                      顺序刷题
+                    </button>
+                    <button
+                      onClick={() => startPractice(bank.id, 'random')}
+                      className="flex-1 flex items-center justify-center gap-2 py-2 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
+                    >
+                      <Shuffle size={16} />
+                      随机刷题
+                    </button>
                   </div>
                   <button
-                    onClick={(e) => handleDelete(bank.id, e)}
-                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                    onClick={() => startMemorize(bank.id)}
+                    className="w-full flex items-center justify-center gap-2 py-2 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
                   >
-                    <Trash2 size={18} />
+                    <Eye size={16} />
+                    背题模式
                   </button>
                 </div>
-
-                <div className="flex gap-2 mb-2">
-                  <button
-                    onClick={() => startPractice(bank.id, 'sequence')}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-                  >
-                    <Play size={16} />
-                    顺序刷题
-                  </button>
-                  <button
-                    onClick={() => startPractice(bank.id, 'random')}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
-                  >
-                    <Shuffle size={16} />
-                    随机刷题
-                  </button>
-                </div>
-                <button
-                  onClick={() => startMemorize(bank.id)}
-                  className="w-full flex items-center justify-center gap-2 py-2 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
-                >
-                  <Eye size={16} />
-                  背题模式
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

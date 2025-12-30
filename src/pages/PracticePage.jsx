@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Star, Check, X } from 'lucide-react'
-import { questionBankAPI, questionAPI, practiceRecordAPI, wrongQuestionAPI } from '../db'
+import { questionBankAPI, questionAPI, practiceRecordAPI, wrongQuestionAPI, sessionAPI } from '../db'
 import QuestionCard from '../components/QuestionCard'
 import { formatTime, shuffleArray } from '../utils/helpers'
 
@@ -10,6 +10,7 @@ export default function PracticePage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const mode = searchParams.get('mode') || 'sequence'
+  const continueSession = searchParams.get('continue') === 'true'
 
   const [bank, setBank] = useState(null)
   const [questions, setQuestions] = useState([])
@@ -19,6 +20,31 @@ export default function PracticePage() {
   const [timeSpent, setTimeSpent] = useState(0)
   const [sessionStats, setSessionStats] = useState({ correct: 0, wrong: 0 })
   const [loading, setLoading] = useState(true)
+  const [sessionRestored, setSessionRestored] = useState(false)
+
+  const questionsRef = useRef([])
+
+  // 保存会话进度
+  const saveSession = useCallback(async (index, stats, questionList) => {
+    const qs = questionList || questionsRef.current
+    if (qs.length === 0) return
+
+    console.log('[DEBUG] 保存会话:', {
+      bankId: Number(bankId),
+      mode,
+      currentIndex: index,
+      questionCount: qs.length,
+      sessionStats: stats
+    })
+
+    await sessionAPI.save({
+      bankId: Number(bankId),
+      mode,
+      currentIndex: index,
+      questionIds: qs.map(q => q.id),
+      sessionStats: stats
+    })
+  }, [bankId, mode])
 
   // 加载数据
   useEffect(() => {
@@ -36,19 +62,58 @@ export default function PracticePage() {
 
         setBank(bankData)
 
-        // 根据模式处理题目顺序
+        // 检查是否有保存的会话需要恢复
+        const savedSession = await sessionAPI.get(Number(bankId))
+
+        console.log('[DEBUG] 恢复会话检查:', {
+          savedSession,
+          continueSession,
+          hasQuestionIds: savedSession?.questionIds?.length > 0,
+          savedCurrentIndex: savedSession?.currentIndex
+        })
+
+        if (savedSession && continueSession && savedSession.questionIds?.length > 0) {
+          // 恢复会话：按保存的顺序重建题目列表
+          const questionMap = new Map(questionsData.map(q => [q.id, q]))
+          const orderedQuestions = savedSession.questionIds
+            .map(id => questionMap.get(id))
+            .filter(Boolean)
+
+          if (orderedQuestions.length > 0) {
+            console.log('[DEBUG] 恢复会话:', {
+              currentIndex: savedSession.currentIndex,
+              questionCount: orderedQuestions.length,
+              sessionStats: savedSession.sessionStats
+            })
+            setQuestions(orderedQuestions)
+            questionsRef.current = orderedQuestions
+            setCurrentIndex(savedSession.currentIndex || 0)
+            setSessionStats(savedSession.sessionStats || { correct: 0, wrong: 0 })
+            setSessionRestored(true)
+            setLoading(false)
+            return
+          }
+        }
+
+        // 没有会话或不需要恢复，正常加载
         const orderedQuestions = mode === 'random'
           ? shuffleArray(questionsData)
           : questionsData
 
         setQuestions(orderedQuestions)
+        questionsRef.current = orderedQuestions
+
+        // 如果有旧会话但不继续，清除它
+        if (savedSession) {
+          await sessionAPI.delete(Number(bankId))
+        }
       } finally {
         setLoading(false)
       }
     }
 
     loadData()
-  }, [bankId, mode, navigate])
+  }, [bankId, mode, navigate, continueSession])
 
   // 计时器
   useEffect(() => {
@@ -60,6 +125,13 @@ export default function PracticePage() {
 
     return () => clearInterval(timer)
   }, [showResult])
+
+  // 自动保存进度（当切换题目时）
+  useEffect(() => {
+    if (questions.length > 0 && currentIndex > 0) {
+      saveSession(currentIndex, sessionStats, questions)
+    }
+  }, [currentIndex, questions, sessionStats, saveSession])
 
   const currentQuestion = questions[currentIndex]
 
@@ -86,10 +158,11 @@ export default function PracticePage() {
     setShowResult(true)
 
     // 更新会话统计
-    setSessionStats(prev => ({
-      correct: prev.correct + (isCorrect ? 1 : 0),
-      wrong: prev.wrong + (isCorrect ? 0 : 1)
-    }))
+    const newStats = {
+      correct: sessionStats.correct + (isCorrect ? 1 : 0),
+      wrong: sessionStats.wrong + (isCorrect ? 0 : 1)
+    }
+    setSessionStats(newStats)
 
     // 保存刷题记录
     await practiceRecordAPI.add({
@@ -104,6 +177,9 @@ export default function PracticePage() {
     if (!isCorrect) {
       await wrongQuestionAPI.add(currentQuestion.id, Number(bankId))
     }
+
+    // 保存会话进度
+    await saveSession(currentIndex, newStats, questions)
   }
 
   // 下一题
@@ -136,15 +212,16 @@ export default function PracticePage() {
     )
   }
 
-  // 退出确认
+  // 退出（进度已自动保存）
   const handleExit = () => {
-    if (sessionStats.correct + sessionStats.wrong > 0) {
-      if (confirm('确定要退出吗？本次刷题记录已保存。')) {
-        navigate('/')
-      }
-    } else {
-      navigate('/')
-    }
+    navigate('/')
+  }
+
+  // 完成刷题
+  const handleComplete = async () => {
+    // 清除会话
+    await sessionAPI.delete(Number(bankId))
+    navigate('/')
   }
 
   if (loading) {
@@ -188,6 +265,7 @@ export default function PracticePage() {
             <div className="font-medium">{bank?.name}</div>
             <div className="text-xs text-[var(--color-text-secondary)]">
               {mode === 'random' ? '随机模式' : '顺序模式'}
+              {sessionRestored && ' · 已恢复进度'}
             </div>
           </div>
 
@@ -286,7 +364,7 @@ export default function PracticePage() {
 
               {isLastQuestion ? (
                 <button
-                  onClick={() => navigate('/')}
+                  onClick={handleComplete}
                   className="flex-1 py-3 bg-green-500 text-white rounded-xl font-medium hover:bg-green-600 transition-colors"
                 >
                   完成刷题

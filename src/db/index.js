@@ -10,6 +10,16 @@ db.version(1).stores({
   settings: 'key'
 })
 
+// 版本2：添加刷题会话表
+db.version(2).stores({
+  questionBanks: '++id, name, createdAt',
+  questions: '++id, bankId, type, isFavorite, orderIndex',
+  practiceRecords: '++id, questionId, bankId, isCorrect, createdAt',
+  wrongQuestions: '++id, questionId, bankId, wrongCount, lastWrongAt',
+  settings: 'key',
+  practiceSessions: 'bankId, mode, updatedAt'
+})
+
 // 题库操作
 export const questionBankAPI = {
   async create(name) {
@@ -210,6 +220,44 @@ export const settingsAPI = {
 
   async set(key, value) {
     await db.settings.put({ key, value })
+  }
+}
+
+// 刷题会话操作
+export const sessionAPI = {
+  // 保存会话
+  async save(session) {
+    const { bankId, mode, currentIndex, questionIds, sessionStats } = session
+    await db.practiceSessions.put({
+      bankId,
+      mode,
+      currentIndex,
+      questionIds, // 保存题目ID顺序（用于随机模式恢复）
+      sessionStats,
+      updatedAt: Date.now()
+    })
+  },
+
+  // 获取会话
+  async get(bankId) {
+    return await db.practiceSessions.get(bankId)
+  },
+
+  // 获取所有未完成的会话
+  async getAllActive() {
+    const sessions = await db.practiceSessions.toArray()
+    // 只返回有进度的会话
+    return sessions.filter(s => s.currentIndex > 0)
+  },
+
+  // 删除会话
+  async delete(bankId) {
+    await db.practiceSessions.delete(bankId)
+  },
+
+  // 清除所有会话
+  async clear() {
+    await db.practiceSessions.clear()
   }
 }
 
