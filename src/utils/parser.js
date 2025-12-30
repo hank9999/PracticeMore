@@ -139,9 +139,13 @@ function parseQuestion(text, currentType) {
   if (!content || !answer) return null
 
   // 智能检测题型
-  let type = currentType
-  if (!type) {
-    type = detectTypeFromContent(options, answer)
+  // 优先根据选项内容判断，currentType 仅作为参考
+  let type = detectTypeFromContent(options, answer)
+
+  // 只有当内容检测结果不确定（默认单选）且有明确的 currentType 时，才使用 currentType
+  // 但如果选项数量 > 2，则一定不是判断题
+  if (currentType && options.length <= 2) {
+    type = currentType
   }
 
   // 对于判断题，确保选项存在
