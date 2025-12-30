@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Plus, Upload, Trash2, Play, Shuffle, ChevronRight, BookOpen } from 'lucide-react'
+import { Plus, Upload, Trash2, Play, Shuffle, ChevronRight, BookOpen, Eye } from 'lucide-react'
 import { questionBankAPI, practiceRecordAPI, wrongQuestionAPI } from '../db'
 import { formatDate } from '../utils/helpers'
 
@@ -43,6 +43,10 @@ export default function HomePage() {
 
   const startPractice = (bankId, mode) => {
     navigate(`/practice/${bankId}?mode=${mode}`)
+  }
+
+  const startMemorize = (bankId) => {
+    navigate(`/memorize/${bankId}`)
   }
 
   if (loading) {
@@ -156,7 +160,7 @@ export default function HomePage() {
                   </button>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 mb-2">
                   <button
                     onClick={() => startPractice(bank.id, 'sequence')}
                     className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
@@ -172,6 +176,13 @@ export default function HomePage() {
                     随机刷题
                   </button>
                 </div>
+                <button
+                  onClick={() => startMemorize(bank.id)}
+                  className="w-full flex items-center justify-center gap-2 py-2 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                >
+                  <Eye size={16} />
+                  背题模式
+                </button>
               </div>
             ))}
           </div>

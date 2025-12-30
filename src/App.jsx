@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import HomePage from './pages/HomePage'
 import ImportPage from './pages/ImportPage'
 import PracticePage from './pages/PracticePage'
+import MemorizePage from './pages/MemorizePage'
 import WrongPage from './pages/WrongPage'
 import FavoritesPage from './pages/FavoritesPage'
 import HistoryPage from './pages/HistoryPage'
@@ -23,6 +24,7 @@ function App() {
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           <Route path="/practice/:bankId" element={<PracticePage />} />
+          <Route path="/memorize/:bankId" element={<MemorizePage />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
