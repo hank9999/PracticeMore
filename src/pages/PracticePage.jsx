@@ -150,11 +150,21 @@ export default function PracticePage() {
     return selectedAnswer === answer
   }, [currentQuestion, selectedAnswer])
 
-  // 提交答案
-  const handleSubmit = async () => {
-    if (!selectedAnswer) return
+  // 提交答案（支持传入答案，用于单选自动提交）
+  const handleSubmit = async (answer) => {
+    const answerToCheck = answer !== undefined ? answer : selectedAnswer
+    if (!answerToCheck) return
 
-    const isCorrect = checkAnswer()
+    const isCorrect = (() => {
+      const { type, answer: correctAnswer } = currentQuestion
+      if (type === 'multiple') {
+        const userAnswer = [...(answerToCheck || [])].sort().join('')
+        const correct = [...correctAnswer].sort().join('')
+        return userAnswer === correct
+      }
+      return answerToCheck === correctAnswer
+    })()
+
     setShowResult(true)
 
     // 更新会话统计
@@ -168,7 +178,7 @@ export default function PracticePage() {
     await practiceRecordAPI.add({
       questionId: currentQuestion.id,
       bankId: Number(bankId),
-      userAnswer: selectedAnswer,
+      userAnswer: answerToCheck,
       isCorrect,
       timeSpent
     })
@@ -310,6 +320,7 @@ export default function PracticePage() {
           onSelectAnswer={setSelectedAnswer}
           showResult={showResult}
           onToggleFavorite={handleToggleFavorite}
+          onAutoSubmit={handleSubmit}
         />
 
         {/* 答题结果反馈 */}
@@ -345,13 +356,20 @@ export default function PracticePage() {
       <footer className="sticky bottom-0 bg-[var(--color-card)] border-t border-[var(--color-border)] p-4 safe-area-pb">
         <div className="flex gap-3 max-w-lg mx-auto">
           {!showResult ? (
-            <button
-              onClick={handleSubmit}
-              disabled={!selectedAnswer}
-              className="flex-1 py-3 bg-blue-500 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
-            >
-              确认答案
-            </button>
+            // 多选题显示确认按钮，单选题不需要（点击即提交）
+            currentQuestion.type === 'multiple' ? (
+              <button
+                onClick={() => handleSubmit()}
+                disabled={!selectedAnswer || selectedAnswer.length === 0}
+                className="flex-1 py-3 bg-blue-500 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
+              >
+                确认答案
+              </button>
+            ) : (
+              <div className="flex-1 py-3 text-center text-[var(--color-text-secondary)]">
+                请选择答案
+              </div>
+            )
           ) : (
             <>
               <button

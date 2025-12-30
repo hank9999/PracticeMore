@@ -8,6 +8,7 @@ export default function QuestionCard({
   onSelectAnswer,
   showResult,
   onToggleFavorite,
+  onAutoSubmit, // 单选自动提交回调
   mode = 'practice' // practice | review
 }) {
   const { type, content, options, answer, isFavorite } = question
@@ -37,7 +38,11 @@ export default function QuestionCard({
         onSelectAnswer([...current, optionKey].sort())
       }
     } else {
+      // 单选：选择后立即提交
       onSelectAnswer(optionKey)
+      if (onAutoSubmit) {
+        onAutoSubmit(optionKey)
+      }
     }
   }
 
