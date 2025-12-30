@@ -151,9 +151,9 @@ export default function WrongPage() {
               onClick={() => setReviewMode(false)}
               className="p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={20} className="text-[var(--color-text)]" />
             </button>
-            <div className="font-medium">错题复习</div>
+            <div className="font-medium text-[var(--color-text)]">错题复习</div>
             <div className="text-sm text-[var(--color-text-secondary)]">
               {currentIndex + 1} / {wrongQuestions.length}
             </div>

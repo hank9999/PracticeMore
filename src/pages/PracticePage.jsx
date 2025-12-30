@@ -268,11 +268,11 @@ export default function PracticePage() {
             onClick={handleExit}
             className="p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={20} className="text-[var(--color-text)]" />
           </button>
 
           <div className="text-center">
-            <div className="font-medium">{bank?.name}</div>
+            <div className="font-medium text-[var(--color-text)]">{bank?.name}</div>
             <div className="text-xs text-[var(--color-text-secondary)]">
               {mode === 'random' ? '随机模式' : '顺序模式'}
               {sessionRestored && ' · 已恢复进度'}

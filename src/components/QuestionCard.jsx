@@ -115,7 +115,7 @@ export default function QuestionCard({
             <span className={`w-6 h-6 rounded-full border flex items-center justify-center text-sm font-medium shrink-0 ${
               isSelected(option.key)
                 ? 'border-blue-500 bg-blue-500 text-white'
-                : 'border-[var(--color-border)]'
+                : 'border-[var(--color-border)] text-[var(--color-text)]'
             } ${
               showResult && isCorrect(option.key)
                 ? 'border-green-500 bg-green-500 text-white'
@@ -127,7 +127,7 @@ export default function QuestionCard({
             }`}>
               {option.key}
             </span>
-            <span className="flex-1">{option.text}</span>
+            <span className="flex-1 text-[var(--color-text)]">{option.text}</span>
           </button>
         ))}
       </div>

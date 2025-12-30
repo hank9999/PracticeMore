@@ -69,9 +69,9 @@ export default function ImportPage() {
           onClick={() => step === 'upload' ? navigate('/') : setStep('upload')}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={20} className="text-[var(--color-text)]" />
         </button>
-        <h1 className="text-xl font-bold">导入题库</h1>
+        <h1 className="text-xl font-bold text-[var(--color-text)]">导入题库</h1>
       </div>
 
       {step === 'upload' && (

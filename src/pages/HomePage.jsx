@@ -169,7 +169,7 @@ export default function HomePage() {
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <h3 className="font-medium">{bank.name}</h3>
+                      <h3 className="font-medium text-[var(--color-text)]">{bank.name}</h3>
                       <p className="text-sm text-[var(--color-text-secondary)]">
                         {bank.questionCount} 题 · {formatDate(bank.createdAt)}
                       </p>
