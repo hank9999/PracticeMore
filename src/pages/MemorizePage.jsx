@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, Star, Eye, EyeOff } from 'lucide-react'
-import { questionBankAPI, questionAPI } from '../db'
+import { questionBankAPI, questionAPI, memorizeSessionAPI } from '../db'
 import { TYPE_NAMES, shuffleArray } from '../utils/helpers'
 
 export default function MemorizePage() {
@@ -9,13 +9,41 @@ export default function MemorizePage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const mode = searchParams.get('mode') || 'sequence'
+  const continueSession = searchParams.get('continue') === 'true'
 
   const [bank, setBank] = useState(null)
   const [questions, setQuestions] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(true)
   const [loading, setLoading] = useState(true)
+  const [sessionStats, setSessionStats] = useState({ browsed: 0 })
+  const [sessionRestored, setSessionRestored] = useState(false)
 
+  const questionsRef = useRef([])
+
+  // 保存会话进度
+  const saveSession = useCallback(async (index, stats, questionList) => {
+    const qs = questionList || questionsRef.current
+    if (qs.length === 0) return
+
+    console.log('[DEBUG] 背题保存会话:', {
+      bankId: Number(bankId),
+      mode,
+      currentIndex: index,
+      questionCount: qs.length,
+      sessionStats: stats
+    })
+
+    await memorizeSessionAPI.save({
+      bankId: Number(bankId),
+      mode,
+      currentIndex: index,
+      questionIds: qs.map(q => q.id),
+      sessionStats: stats
+    })
+  }, [bankId, mode])
+
+  // 加载数据
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -30,17 +58,68 @@ export default function MemorizePage() {
         }
 
         setBank(bankData)
+
+        // 检查是否有保存的会话需要恢复
+        const savedSession = await memorizeSessionAPI.get(Number(bankId))
+
+        console.log('[DEBUG] 背题恢复会话检查:', {
+          savedSession,
+          continueSession,
+          hasQuestionIds: savedSession?.questionIds?.length > 0,
+          savedCurrentIndex: savedSession?.currentIndex
+        })
+
+        if (savedSession && continueSession && savedSession.questionIds?.length > 0) {
+          // 恢复会话：按保存的顺序重建题目列表
+          const questionMap = new Map(questionsData.map(q => [q.id, q]))
+          const orderedQuestions = savedSession.questionIds
+            .map(id => questionMap.get(id))
+            .filter(Boolean)
+
+          if (orderedQuestions.length > 0) {
+            console.log('[DEBUG] 背题恢复会话:', {
+              currentIndex: savedSession.currentIndex,
+              questionCount: orderedQuestions.length,
+              sessionStats: savedSession.sessionStats
+            })
+            setQuestions(orderedQuestions)
+            questionsRef.current = orderedQuestions
+            setCurrentIndex(savedSession.currentIndex || 0)
+            setSessionStats(savedSession.sessionStats || { browsed: 0 })
+            setSessionRestored(true)
+            setLoading(false)
+            return
+          }
+        }
+
+        // 没有会话或不需要恢复，正常加载
         const orderedQuestions = mode === 'random'
           ? shuffleArray(questionsData)
           : questionsData
+
         setQuestions(orderedQuestions)
+        questionsRef.current = orderedQuestions
+
+        // 如果有旧会话但不继续，清除它
+        if (savedSession) {
+          await memorizeSessionAPI.delete(Number(bankId))
+        }
       } finally {
         setLoading(false)
       }
     }
 
     loadData()
-  }, [bankId, mode, navigate])
+  }, [bankId, mode, navigate, continueSession])
+
+  // 自动保存进度（当切换题目时）
+  useEffect(() => {
+    if (questions.length > 0 && currentIndex > 0) {
+      const stats = { browsed: currentIndex + 1 }
+      setSessionStats(stats)
+      saveSession(currentIndex, stats, questions)
+    }
+  }, [currentIndex, questions, saveSession])
 
   const currentQuestion = questions[currentIndex]
 
@@ -50,9 +129,13 @@ export default function MemorizePage() {
     }
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(prev => prev + 1)
+    } else {
+      // 最后一题，清除会话并返回首页
+      await memorizeSessionAPI.delete(Number(bankId))
+      navigate('/')
     }
   }
 
@@ -121,6 +204,7 @@ export default function MemorizePage() {
             <div className="font-medium text-[var(--color-text)]">{bank?.name}</div>
             <div className="text-xs text-[var(--color-text-secondary)]">
               背题模式 · {mode === 'random' ? '随机' : '顺序'}
+              {sessionRestored && ' · 已恢复进度'}
             </div>
           </div>
 

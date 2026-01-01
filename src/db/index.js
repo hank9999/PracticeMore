@@ -20,6 +20,17 @@ db.version(2).stores({
   practiceSessions: 'bankId, mode, updatedAt'
 })
 
+// 版本3：添加背题会话表
+db.version(3).stores({
+  questionBanks: '++id, name, createdAt',
+  questions: '++id, bankId, type, isFavorite, orderIndex',
+  practiceRecords: '++id, questionId, bankId, isCorrect, createdAt',
+  wrongQuestions: '++id, questionId, bankId, wrongCount, lastWrongAt',
+  settings: 'key',
+  practiceSessions: 'bankId, mode, updatedAt',
+  memorizeSessions: 'bankId, mode, updatedAt'
+})
+
 // 题库操作
 export const questionBankAPI = {
   async create(name) {
@@ -258,6 +269,43 @@ export const sessionAPI = {
   // 清除所有会话
   async clear() {
     await db.practiceSessions.clear()
+  }
+}
+
+// 背题会话操作
+export const memorizeSessionAPI = {
+  // 保存会话
+  async save(session) {
+    const { bankId, mode, currentIndex, questionIds, sessionStats } = session
+    await db.memorizeSessions.put({
+      bankId,
+      mode,
+      currentIndex,
+      questionIds,
+      sessionStats,
+      updatedAt: Date.now()
+    })
+  },
+
+  // 获取会话
+  async get(bankId) {
+    return await db.memorizeSessions.get(bankId)
+  },
+
+  // 获取所有未完成的会话
+  async getAllActive() {
+    const sessions = await db.memorizeSessions.toArray()
+    return sessions.filter(s => s.currentIndex > 0)
+  },
+
+  // 删除会话
+  async delete(bankId) {
+    await db.memorizeSessions.delete(bankId)
+  },
+
+  // 清除所有会话
+  async clear() {
+    await db.memorizeSessions.clear()
   }
 }
 

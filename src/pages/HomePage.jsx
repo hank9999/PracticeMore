@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Upload, Trash2, Play, Shuffle, ChevronRight, BookOpen, Eye, RotateCcw } from 'lucide-react'
-import { questionBankAPI, practiceRecordAPI, wrongQuestionAPI, sessionAPI } from '../db'
+import { questionBankAPI, practiceRecordAPI, wrongQuestionAPI, sessionAPI, memorizeSessionAPI } from '../db'
 import { formatDate } from '../utils/helpers'
 
 export default function HomePage() {
@@ -9,7 +9,8 @@ export default function HomePage() {
   const [stats, setStats] = useState({ total: 0, correct: 0, wrong: 0, accuracy: 0 })
   const [todayStats, setTodayStats] = useState({ total: 0, correct: 0 })
   const [wrongCount, setWrongCount] = useState(0)
-  const [sessions, setSessions] = useState({}) // bankId -> session
+  const [sessions, setSessions] = useState({}) // bankId -> session (刷题)
+  const [memorizeSessions, setMemorizeSessions] = useState({}) // bankId -> session (背题)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
@@ -19,24 +20,32 @@ export default function HomePage() {
 
   const loadData = async () => {
     try {
-      const [banksData, statsData, todayData, wrongData, activeSessions] = await Promise.all([
+      const [banksData, statsData, todayData, wrongData, activePractice, activeMemorize] = await Promise.all([
         questionBankAPI.getAll(),
         practiceRecordAPI.getStats(),
         practiceRecordAPI.getTodayStats(),
         wrongQuestionAPI.getCount(),
-        sessionAPI.getAllActive()
+        sessionAPI.getAllActive(),
+        memorizeSessionAPI.getAllActive()
       ])
       setBanks(banksData)
       setStats(statsData)
       setTodayStats(todayData)
       setWrongCount(wrongData)
 
-      // 将会话转换为 bankId -> session 的映射
-      const sessionMap = {}
-      activeSessions.forEach(s => {
-        sessionMap[s.bankId] = s
+      // 刷题会话映射
+      const practiceMap = {}
+      activePractice.forEach(s => {
+        practiceMap[s.bankId] = s
       })
-      setSessions(sessionMap)
+      setSessions(practiceMap)
+
+      // 背题会话映射
+      const memorizeMap = {}
+      activeMemorize.forEach(s => {
+        memorizeMap[s.bankId] = s
+      })
+      setMemorizeSessions(memorizeMap)
     } finally {
       setLoading(false)
     }
@@ -46,8 +55,9 @@ export default function HomePage() {
     e.stopPropagation()
     if (confirm('确定要删除这个题库吗？相关的刷题记录和错题也会被删除。')) {
       await questionBankAPI.delete(id)
-      // 同时删除会话
+      // 同时删除刷题和背题会话
       await sessionAPI.delete(id)
+      await memorizeSessionAPI.delete(id)
       loadData()
     }
   }
@@ -65,6 +75,13 @@ export default function HomePage() {
 
   const startMemorize = (bankId) => {
     navigate(`/memorize/${bankId}`)
+  }
+
+  const continueMemorize = (bankId) => {
+    const session = memorizeSessions[bankId]
+    if (session) {
+      navigate(`/memorize/${bankId}?mode=${session.mode}&continue=true`)
+    }
   }
 
   if (loading) {
@@ -159,8 +176,10 @@ export default function HomePage() {
         ) : (
           <div className="space-y-3">
             {banks.map((bank) => {
-              const session = sessions[bank.id]
-              const hasSession = session && session.currentIndex > 0
+              const practiceSession = sessions[bank.id]
+              const memorizeSession = memorizeSessions[bank.id]
+              const hasPracticeSession = practiceSession && practiceSession.currentIndex > 0
+              const hasMemorizeSession = memorizeSession && memorizeSession.currentIndex > 0
 
               return (
                 <div
@@ -183,7 +202,7 @@ export default function HomePage() {
                   </div>
 
                   {/* 继续刷题入口 */}
-                  {hasSession && (
+                  {hasPracticeSession && (
                     <button
                       onClick={() => continuePractice(bank.id)}
                       className="w-full flex items-center justify-between mb-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
@@ -193,7 +212,23 @@ export default function HomePage() {
                         <span className="font-medium text-orange-600 dark:text-orange-400">继续刷题</span>
                       </div>
                       <span className="text-sm text-orange-500">
-                        {session.currentIndex + 1}/{session.questionIds?.length || bank.questionCount} · {session.mode === 'random' ? '随机' : '顺序'}
+                        {practiceSession.currentIndex + 1}/{practiceSession.questionIds?.length || bank.questionCount} · {practiceSession.mode === 'random' ? '随机' : '顺序'}
+                      </span>
+                    </button>
+                  )}
+
+                  {/* 继续背题入口 */}
+                  {hasMemorizeSession && (
+                    <button
+                      onClick={() => continueMemorize(bank.id)}
+                      className="w-full flex items-center justify-between mb-2 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <RotateCcw size={18} className="text-purple-500" />
+                        <span className="font-medium text-purple-600 dark:text-purple-400">继续背题</span>
+                      </div>
+                      <span className="text-sm text-purple-500">
+                        {memorizeSession.currentIndex + 1}/{memorizeSession.questionIds?.length || bank.questionCount} · {memorizeSession.mode === 'random' ? '随机' : '顺序'}
                       </span>
                     </button>
                   )}
