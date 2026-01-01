@@ -276,11 +276,11 @@ export default function MemorizePage() {
                   <span className={`w-6 h-6 rounded-full border flex items-center justify-center text-sm font-medium shrink-0 ${
                     showAnswer && isCorrect
                       ? 'border-green-500 bg-green-500 text-white'
-                      : 'border-[var(--color-border)]'
+                      : 'border-[var(--color-border)] text-[var(--color-text)]'
                   }`}>
                     {option.key}
                   </span>
-                  <span className="flex-1">{option.text}</span>
+                  <span className="flex-1 text-[var(--color-text)]">{option.text}</span>
                 </div>
               )
             })}
