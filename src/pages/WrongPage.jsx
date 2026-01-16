@@ -91,6 +91,9 @@ export default function WrongPage() {
       setTimeout(() => {
         if (confirm('回答正确！是否从错题本中移除这道题？')) {
           handleRemove(question.id)
+          // 重置状态，避免下一题直接显示答案
+          setShowResult(false)
+          setSelectedAnswer(null)
         }
       }, 500)
     }
