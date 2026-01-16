@@ -15,6 +15,7 @@ export default function WrongPage() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState(null)
   const [showResult, setShowResult] = useState(false)
+  const [pendingRemoveId, setPendingRemoveId] = useState(null)
 
   useEffect(() => {
     loadData()
@@ -60,19 +61,20 @@ export default function WrongPage() {
     setShowResult(false)
   }
 
-  const handleSubmit = async () => {
-    if (!selectedAnswer) return
+  const handleSubmit = async (directAnswer) => {
+    const answerToSubmit = directAnswer || selectedAnswer
+    if (!answerToSubmit) return
 
     const question = wrongQuestions[currentIndex]
     const { type, answer } = question
 
     let isCorrect = false
     if (type === 'multiple') {
-      const userAnswer = [...(selectedAnswer || [])].sort().join('')
+      const userAnswer = [...(answerToSubmit || [])].sort().join('')
       const correctAnswer = [...answer].sort().join('')
       isCorrect = userAnswer === correctAnswer
     } else {
-      isCorrect = selectedAnswer === answer
+      isCorrect = answerToSubmit === answer
     }
 
     setShowResult(true)
@@ -81,25 +83,38 @@ export default function WrongPage() {
     await practiceRecordAPI.add({
       questionId: question.id,
       bankId: question.bankId,
-      userAnswer: selectedAnswer,
+      userAnswer: answerToSubmit,
       isCorrect,
       timeSpent: 0
     })
 
-    // 如果答对了，询问是否从错题本移除
+    // 如果答对了，标记待删除（等用户点击下一题时再删除）
     if (isCorrect) {
-      setTimeout(() => {
-        if (confirm('回答正确！是否从错题本中移除这道题？')) {
-          handleRemove(question.id)
-          // 重置状态，避免下一题直接显示答案
-          setShowResult(false)
-          setSelectedAnswer(null)
-        }
-      }, 500)
+      setPendingRemoveId(question.id)
     }
   }
 
   const handleNext = () => {
+    // 如果有待删除的题目，先执行删除
+    if (pendingRemoveId) {
+      handleRemove(pendingRemoveId)
+      setPendingRemoveId(null)
+      // 删除后数组变短，当前索引已指向下一题，无需调整
+      // 但需要检查是否还有题目
+      const remainingCount = wrongQuestions.length - 1
+      if (remainingCount === 0) {
+        alert('本轮错题复习完成！')
+        setReviewMode(false)
+      } else if (currentIndex >= remainingCount) {
+        // 如果删除的是最后一题，回到第一题或结束
+        alert('本轮错题复习完成！')
+        setReviewMode(false)
+      }
+      setSelectedAnswer(null)
+      setShowResult(false)
+      return
+    }
+
     setSelectedAnswer(null)
     setShowResult(false)
 
@@ -127,6 +142,54 @@ export default function WrongPage() {
       )
     )
   }
+
+  // 键盘快捷键（仅在复习模式下生效）
+  useEffect(() => {
+    if (!reviewMode) return
+
+    const currentQuestion = wrongQuestions[currentIndex]
+    if (!currentQuestion) return
+
+    const handleKeyDown = (e) => {
+      // 数字键 1-9 对应选项 A-I
+      if (e.key >= '1' && e.key <= '9' && !showResult) {
+        const optionIndex = parseInt(e.key) - 1
+        const optionKey = String.fromCharCode(65 + optionIndex) // 65 是 'A' 的 ASCII 码
+        const optionExists = currentQuestion.options.some(opt => opt.key === optionKey)
+
+        if (optionExists) {
+          if (currentQuestion.type === 'multiple') {
+            // 多选题：切换选中状态
+            const current = selectedAnswer || []
+            if (current.includes(optionKey)) {
+              setSelectedAnswer(current.filter(k => k !== optionKey))
+            } else {
+              setSelectedAnswer([...current, optionKey].sort())
+            }
+          } else {
+            // 单选题：选择后自动提交
+            setSelectedAnswer(optionKey)
+            handleSubmit(optionKey)
+          }
+        }
+      }
+
+      // 回车键：多选题确认答案
+      if (e.key === 'Enter' && !showResult && currentQuestion.type === 'multiple') {
+        if (selectedAnswer && selectedAnswer.length > 0) {
+          handleSubmit()
+        }
+      }
+
+      // 右箭头或回车：下一题（仅在显示结果后）
+      if ((e.key === 'ArrowRight' || e.key === 'Enter') && showResult) {
+        handleNext()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [reviewMode, wrongQuestions, currentIndex, showResult, selectedAnswer])
 
   if (loading) {
     return (
@@ -189,7 +252,7 @@ export default function WrongPage() {
         </div>
 
         {/* 操作栏 */}
-        <footer className="sticky bottom-0 bg-[var(--color-card)] border-t border-[var(--color-border)] p-4 safe-area-pb">
+        <footer className="sticky bottom-16 bg-[var(--color-card)] border-t border-[var(--color-border)] p-4 safe-area-pb">
           {!showResult ? (
             <button
               onClick={handleSubmit}
@@ -206,6 +269,12 @@ export default function WrongPage() {
               {currentIndex < wrongQuestions.length - 1 ? '下一题' : '完成复习'}
             </button>
           )}
+
+          {/* 快捷键提示 */}
+          <p className="text-center text-xs text-[var(--color-text-secondary)] mt-3 hidden sm:block">
+            快捷键：1-9 选择选项{currentQuestion.type === 'multiple' ? '，回车确认' : ''}
+            {showResult ? '，→ 或回车下一题' : ''}
+          </p>
         </footer>
       </div>
     )
