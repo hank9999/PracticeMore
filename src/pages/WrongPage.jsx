@@ -240,6 +240,7 @@ export default function WrongPage() {
             onSelectAnswer={setSelectedAnswer}
             showResult={showResult}
             onToggleFavorite={handleToggleFavorite}
+            onAutoSubmit={handleSubmit}
           />
 
           {/* 错误次数提示 */}
