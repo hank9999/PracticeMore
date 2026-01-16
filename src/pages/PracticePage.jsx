@@ -222,6 +222,52 @@ export default function PracticePage() {
     )
   }
 
+  // 键盘快捷键
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // 数字键 1-9 对应选项 A-I
+      if (e.key >= '1' && e.key <= '9' && !showResult && currentQuestion) {
+        const optionIndex = parseInt(e.key) - 1
+        const optionKey = String.fromCharCode(65 + optionIndex) // 65 是 'A' 的 ASCII 码
+        const optionExists = currentQuestion.options.some(opt => opt.key === optionKey)
+
+        if (optionExists) {
+          if (currentQuestion.type === 'multiple') {
+            // 多选题：切换选中状态
+            const current = selectedAnswer || []
+            if (current.includes(optionKey)) {
+              setSelectedAnswer(current.filter(k => k !== optionKey))
+            } else {
+              setSelectedAnswer([...current, optionKey].sort())
+            }
+          } else {
+            // 单选题：选择后自动提交
+            setSelectedAnswer(optionKey)
+            handleSubmit(optionKey)
+          }
+        }
+      }
+
+      // 回车键：多选题确认答案
+      if (e.key === 'Enter' && !showResult && currentQuestion?.type === 'multiple') {
+        if (selectedAnswer && selectedAnswer.length > 0) {
+          handleSubmit()
+        }
+      }
+
+      // 左右箭头：切换题目（仅在显示结果后）
+      if (e.key === 'ArrowLeft' && showResult) {
+        handlePrev()
+      }
+      if (e.key === 'ArrowRight' && showResult) {
+        handleNext()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showResult, currentQuestion, selectedAnswer])
+
   // 退出（进度已自动保存）
   const handleExit = () => {
     navigate('/')
@@ -406,6 +452,12 @@ export default function PracticePage() {
             </>
           )}
         </div>
+
+        {/* 快捷键提示 */}
+        <p className="text-center text-xs text-[var(--color-text-secondary)] mt-3 hidden sm:block">
+          快捷键：1-9 选择选项{currentQuestion?.type === 'multiple' ? '，回车确认' : ''}
+          {showResult ? '，← → 切换题目' : ''}
+        </p>
       </footer>
     </div>
   )
